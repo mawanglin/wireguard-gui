@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LOCALES_DIR = join(ROOT, 'lib', 'i18n', 'locales');
+const RUST_SRC_DIR = join(ROOT, 'src-tauri', 'src');
 const BASE_LOCALE = 'en';
 const LOCALES = ['en', 'zh-CN', 'zh-TW', 'ja', 'ru'];
 
@@ -134,6 +135,41 @@ for (const locale of LOCALES) {
       `    插值不符: ${key} 期望 [${expectedVars || '无'}]，实际 [${actualVars || '无'}]`,
     );
   }
+}
+
+// 交叉核对：Rust 后端抛出的错误码必须都有词条，否则用户会看到英文原文。
+const rustSource = readdirSync(RUST_SRC_DIR)
+  .filter((file) => file.endsWith('.rs'))
+  .map((file) => readFileSync(join(RUST_SRC_DIR, file), 'utf8'))
+  .join('\n');
+
+const backendCodes = new Set(
+  [...rustSource.matchAll(/coded\(\s*"([a-z_]+)"/g)].map((match) => match[1]),
+);
+const translatedCodes = new Set(
+  Object.keys(base.errors ?? {}).filter((code) => code !== 'unknown'),
+);
+
+const untranslatedCodes = [...backendCodes]
+  .filter((code) => !translatedCodes.has(code))
+  .sort();
+const staleCodes = [...translatedCodes]
+  .filter((code) => !backendCodes.has(code))
+  .sort();
+
+if (untranslatedCodes.length > 0) {
+  failed = true;
+  console.error(`\n✗ 后端错误码未翻译（用户会看到英文原文）`);
+  for (const code of untranslatedCodes) {
+    console.error(`    ${code}`);
+  }
+} else if (staleCodes.length > 0) {
+  console.warn(`\n⚠ 有词条但后端已不再抛出，可考虑清理：`);
+  for (const code of staleCodes) {
+    console.warn(`    ${code}`);
+  }
+} else {
+  console.log(`\n✓ 后端 ${backendCodes.size} 个错误码全部有词条`);
 }
 
 if (failed) {

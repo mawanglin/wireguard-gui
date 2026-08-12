@@ -94,6 +94,17 @@
     "timeout": "ネットワーク操作がタイムアウトしました。再試行してください。",
     "encryption_already_enabled": "暗号化は既に有効です。",
     "encryption_not_enabled": "暗号化は有効になっていません。",
-    "invalid_pin": "PIN は 4 桁の数字で入力してください。"
+    "invalid_pin": "PIN は 4 桁の数字で入力してください。",
+    "profile_read_failed": "プロファイルの読み込みに失敗しました。",
+    "profile_write_failed": "プロファイルの書き込みに失敗しました。",
+    "profile_encrypt_failed": "プロファイルの暗号化に失敗しました。",
+    "profile_decrypt_failed": "プロファイルの復号に失敗しました。",
+    "profile_dir_read_failed": "プロファイルディレクトリの読み込みに失敗しました。",
+    "script_exec_failed": "接続スクリプトの実行に失敗しました。",
+    "security_config_invalid": "セキュリティ設定が不正です。",
+    "security_config_write_failed": "セキュリティ設定の保存に失敗しました。",
+    "security_disable_failed": "暗号化の無効化に失敗し、ロールバックも失敗しました。プロファイルが不整合な状態になっている可能性があります。",
+    "security_setup_failed": "暗号化の初期化に失敗しました。",
+    "state_write_failed": "現在のプロファイルの保存に失敗しました。"
   }
 }

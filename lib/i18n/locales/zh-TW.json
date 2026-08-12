@@ -94,6 +94,17 @@
     "timeout": "網路操作逾時，請重試。",
     "encryption_already_enabled": "加密已經啟用。",
     "encryption_not_enabled": "加密尚未啟用。",
-    "invalid_pin": "PIN 碼必須為 4 位數字。"
+    "invalid_pin": "PIN 碼必須為 4 位數字。",
+    "profile_read_failed": "讀取設定檔失敗。",
+    "profile_write_failed": "寫入設定檔失敗。",
+    "profile_encrypt_failed": "設定檔加密失敗。",
+    "profile_decrypt_failed": "設定檔解密失敗。",
+    "profile_dir_read_failed": "讀取設定檔目錄失敗。",
+    "script_exec_failed": "連線指令碼執行失敗。",
+    "security_config_invalid": "安全性設定無效。",
+    "security_config_write_failed": "儲存安全性設定失敗。",
+    "security_disable_failed": "關閉加密失敗，且復原也失敗。本機設定檔可能處於不一致狀態。",
+    "security_setup_failed": "初始化加密失敗。",
+    "state_write_failed": "儲存目前設定檔失敗。"
   }
 }

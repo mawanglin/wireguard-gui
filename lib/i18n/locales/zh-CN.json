@@ -94,6 +94,17 @@
     "timeout": "网络操作超时，请重试。",
     "encryption_already_enabled": "加密已经启用。",
     "encryption_not_enabled": "加密尚未启用。",
-    "invalid_pin": "PIN 码必须为 4 位数字。"
+    "invalid_pin": "PIN 码必须为 4 位数字。",
+    "profile_read_failed": "读取配置失败。",
+    "profile_write_failed": "写入配置失败。",
+    "profile_encrypt_failed": "配置加密失败。",
+    "profile_decrypt_failed": "配置解密失败。",
+    "profile_dir_read_failed": "读取配置目录失败。",
+    "script_exec_failed": "连接脚本执行失败。",
+    "security_config_invalid": "安全配置无效。",
+    "security_config_write_failed": "保存安全配置失败。",
+    "security_disable_failed": "关闭加密失败，且回滚也失败。本地配置可能处于不一致状态。",
+    "security_setup_failed": "初始化加密失败。",
+    "state_write_failed": "保存当前配置失败。"
   }
 }

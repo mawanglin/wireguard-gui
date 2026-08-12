@@ -100,6 +100,17 @@
     "timeout": "Network operation timed out. Please retry.",
     "encryption_already_enabled": "Encryption is already enabled.",
     "encryption_not_enabled": "Encryption is not enabled.",
-    "invalid_pin": "PIN must be exactly 4 digits."
+    "invalid_pin": "PIN must be exactly 4 digits.",
+    "profile_read_failed": "Failed to read profile.",
+    "profile_write_failed": "Failed to write profile.",
+    "profile_encrypt_failed": "Failed to encrypt profile.",
+    "profile_decrypt_failed": "Failed to decrypt profile.",
+    "profile_dir_read_failed": "Failed to read the profiles directory.",
+    "script_exec_failed": "Failed to run the connection script.",
+    "security_config_invalid": "Security config is invalid.",
+    "security_config_write_failed": "Failed to save security config.",
+    "security_disable_failed": "Failed to disable encryption, and the rollback also failed. Your profiles may be in an inconsistent state.",
+    "security_setup_failed": "Failed to initialize encryption.",
+    "state_write_failed": "Failed to save the current profile."
   }
 }
