@@ -3,7 +3,8 @@
   "scripts": {
     "dev": "tauri dev",
     "tauri": "tauri",
-    "lint": "eslint .",
+    "lint": "eslint . && npm run check-i18n",
+    "check-i18n": "node scripts/check-i18n.mjs",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"lib/**/*.test.ts\"",
     "next": "next",
     "clippy": "cargo clippy --manifest-path ./src-tauri/Cargo.toml",
