@@ -3,6 +3,7 @@ import type { Viewport } from 'next';
 import '@/app/globals.css';
 
 import { IBM_Plex_Mono } from 'next/font/google';
+import { I18nProvider } from '@/components/i18n-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -42,7 +43,7 @@ export default function RootLayout({
           defaultTheme="system"
           disableTransitionOnChange
         >
-          {children}
+          <I18nProvider>{children}</I18nProvider>
           <Toaster />
         </ThemeProvider>
       </body>
