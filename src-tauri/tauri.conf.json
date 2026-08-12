@@ -35,7 +35,12 @@
     "resources": [],
     "shortDescription": "",
     "linux": {
-      "deb": {}
+      "deb": {
+        "desktopTemplate": "templates/main.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "templates/main.desktop"
+      }
     }
   },
   "productName": "wireguard-gui",
