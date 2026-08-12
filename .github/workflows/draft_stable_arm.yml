@@ -2,6 +2,10 @@ name: Draft stable ARM
 
 on:
   push:
+    # Tag form: <version>-<channel>, e.g. 0.1.13-stable
+    tags:
+      - '*-stable'
+    # Kept for the original branch-driven flow
     branches:
       - 'release/stable/**'
   pull_request:
@@ -18,17 +22,36 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      # Extract branch info
+      # Extract channel and version from either a tag (0.1.13-stable)
+      # or a release branch (release/stable/0.1.13)
       - name: Set info
         run: |
-          echo "CHANNEL=$(echo ${GITHUB_REF} | awk -F/ '{print $4}')" >> $GITHUB_ENV
-          echo "VERSION=$(echo ${GITHUB_REF} | awk -F/ '{print $5}')" >> $GITHUB_ENV
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "VERSION=${TAG%-*}" >> $GITHUB_ENV
+            echo "CHANNEL=${TAG##*-}" >> $GITHUB_ENV
+          else
+            echo "CHANNEL=$(echo ${GITHUB_REF} | awk -F/ '{print $4}')" >> $GITHUB_ENV
+            echo "VERSION=$(echo ${GITHUB_REF} | awk -F/ '{print $5}')" >> $GITHUB_ENV
+          fi
       # Print info for debug
       - name: Print Info
         run: |
           echo $GITHUB_REF
           echo $CHANNEL
           echo $VERSION
+
+      # Bundle file names are derived from tauri.conf.json. If the ref disagrees
+      # with it, the mismatch would only surface as a "file not found" on upload,
+      # after a full release build. Fail immediately instead.
+      - name: Check ref version matches tauri.conf.json
+        run: |
+          CONF_VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "$CONF_VERSION" != "$VERSION" ]; then
+            echo "::error::Version mismatch: ref says '$VERSION', tauri.conf.json says '$CONF_VERSION'"
+            exit 1
+          fi
+          echo "Version $VERSION matches tauri.conf.json"
 
       # Cache Rust
       - uses: actions/cache@v6
