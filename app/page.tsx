@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { getVersion } from '@tauri-apps/api/app';
 import { Lock, PowerOff, Unlock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import {
@@ -15,6 +16,7 @@ import {
   useAppLoader,
   useAppState,
 } from '@/lib/effects';
+import { useErrorMessage } from '@/lib/i18n/error';
 import { Button } from '@/components/ui/button';
 import { AppLoader } from '@/components/app-loader';
 import { ProfileTable } from '@/components/profile-table';
@@ -31,6 +33,8 @@ const INACTIVITY_LOCK_MS =
     : DEFAULT_INACTIVITY_LOCK_MS;
 
 export default function Index() {
+  const { t } = useTranslation();
+  const errorMessage = useErrorMessage();
   const [showSplash, setShowSplash] = useState(true);
   const [state, , , , fetchState] = useAppState();
   const [appLoader, setAppLoader] = useAppLoader();
@@ -56,32 +60,14 @@ export default function Index() {
     };
   }, [fetchState, setAppLoader]);
 
-  const onError = useCallback((commandError: CommandError) => {
-    const byCode: Record<string, string> = {
-      activation_failed:
-        'Failed to activate connection. Check your profile and NetworkManager logs.',
-      import_failed:
-        'Profile import failed. Verify the WireGuard config content.',
-      invalid_profile_name:
-        'Invalid profile name. Use 1-15 characters: alphanumeric, _, -, ., =',
-      nmcli_missing: 'NetworkManager CLI is missing. Snap mode requires nmcli.',
-      permission_denied:
-        'Permission denied. Check polkit/network-manager permissions.',
-      profile_exists: 'A profile with this name already exists.',
-      profile_not_found: 'Profile no longer exists on disk.',
-      pin_incorrect: 'Incorrect security PIN.',
-      profiles_locked: 'Profiles are locked. Unlock first.',
-      script_failed: 'Connection script failed. Check logs for details.',
-      timeout: 'Network operation timed out. Please retry.',
-    };
-
-    const description =
-      (commandError.code ? byCode[commandError.code] : undefined) ||
-      commandError.message ||
-      'Unknown error';
-
-    toast.error('Connection error', { description });
-  }, []);
+  const onError = useCallback(
+    (commandError: CommandError) => {
+      toast.error(t('app.connectionError'), {
+        description: errorMessage(commandError),
+      });
+    },
+    [t, errorMessage],
+  );
 
   const onConnect = useCallback(
     (profile: string) => {
@@ -89,12 +75,12 @@ export default function Index() {
         setAppLoader({
           kind: 'Connecting',
           isOpen: true,
-          message: `Connecting to ${profile}`,
+          message: t('app.connecting', { profile }),
         });
         connect(profile, onConnectionFinish(), onError);
       };
     },
-    [setAppLoader, onConnectionFinish, onError],
+    [setAppLoader, onConnectionFinish, onError, t],
   );
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
@@ -102,24 +88,24 @@ export default function Index() {
     setAppLoader({
       kind: 'Disconnecting',
       isOpen: true,
-      message: `Disconnecting from ${state.current}`,
+      message: t('app.disconnecting', { profile: state.current }),
     });
     disconnect(onConnectionFinish(), onError);
-  }, [state, setAppLoader, onConnectionFinish, onError]);
+  }, [state, setAppLoader, onConnectionFinish, onError, t]);
 
   const onResetAppData = useCallback(() => {
     resetAppData(
       () => {
-        toast.success('App data reset complete');
+        toast.success(t('app.resetSuccess'));
         fetchState();
       },
       (commandError) => {
-        toast.error('Failed to reset app', {
-          description: commandError.message,
+        toast.error(t('app.resetFailed'), {
+          description: errorMessage(commandError),
         });
       },
     );
-  }, [fetchState]);
+  }, [fetchState, t, errorMessage]);
 
   useEffect(() => {
     if (!state?.encryption_enabled || !state?.is_unlocked) {
@@ -140,7 +126,7 @@ export default function Index() {
         lockProfiles(
           () => {
             fetchState();
-            toast.info('Profiles locked due to inactivity');
+            toast.info(t('app.lockedByInactivity'));
           },
           () => undefined,
         );
@@ -169,7 +155,7 @@ export default function Index() {
         window.removeEventListener(eventName, scheduleLock);
       }
     };
-  }, [state?.encryption_enabled, state?.is_unlocked, fetchState]);
+  }, [state?.encryption_enabled, state?.is_unlocked, fetchState, t]);
 
   return (
     <div className="bg-background h-screen">
@@ -178,8 +164,8 @@ export default function Index() {
       <div className="m-auto flex max-w-(--breakpoint-lg) flex-col px-4 pt-4">
         <div className="mb-8 flex items-center justify-between">
           <Image
-            title="Wireguard GUI"
-            alt="wireguard"
+            title={t('app.logoTitle')}
+            alt={t('app.logoAlt')}
             src="/img/wireguard.png"
             width={42}
             height={42}
@@ -193,7 +179,7 @@ export default function Index() {
             />
             <Button
               disabled={state?.conn_st !== 'Connected'}
-              title="disconnect"
+              title={t('app.disconnect')}
               variant={state?.conn_st === 'Connected' ? 'destructive' : null}
               onClick={onDisconnect}
             >
@@ -207,8 +193,10 @@ export default function Index() {
           ) : (
             <Unlock className="animate-pulsemb-2 size-16 text-red-500" />
           )}
-          <p className="mt-2 font-bold">{state.current || 'Not connected'}</p>
-          <p className="font-bold">{state?.pub_ip || 'ip undetected'}</p>
+          <p className="mt-2 font-bold">
+            {state.current || t('app.notConnected')}
+          </p>
+          <p className="font-bold">{state?.pub_ip || t('app.ipUndetected')}</p>
         </div>
         {state?.encryption_enabled && !state?.is_unlocked ? (
           <UnlockPanel onUnlocked={fetchState} onReset={onResetAppData} />
