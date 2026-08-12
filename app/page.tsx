@@ -19,6 +19,7 @@ import {
 import { useErrorMessage } from '@/lib/i18n/error';
 import { Button } from '@/components/ui/button';
 import { AppLoader } from '@/components/app-loader';
+import { LanguageSwitcher } from '@/components/language-switcher';
 import { ProfileTable } from '@/components/profile-table';
 import { SecurityControls, UnlockPanel } from '@/components/security-controls';
 import { AppSplashScreen } from '@/components/app-splash-screen';
@@ -172,6 +173,7 @@ export default function Index() {
             loading="eager"
           />
           <div className="ml-2 flex items-center gap-2">
+            <LanguageSwitcher />
             <SecurityControls
               encryptionEnabled={state?.encryption_enabled}
               isUnlocked={state?.is_unlocked}
