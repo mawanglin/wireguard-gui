@@ -4,6 +4,7 @@ import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ColumnDef } from '@tanstack/react-table';
 import { DeleteIcon, Edit, Rocket, Upload, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { Profile, ImportResult, ExportResult } from '@/types/profile';
@@ -26,7 +27,8 @@ export interface ProfileTableProps {
 }
 
 function ProfileNameHeader() {
-  return <p className="font-bold">Profiles</p>;
+  const { t } = useTranslation();
+  return <p className="font-bold">{t('profile.listHeader')}</p>;
 }
 
 function ProfileNameCell({
@@ -55,6 +57,7 @@ function ProfileActions({
   row: any;
   onConnect: (profile: string) => () => void;
 }) {
+  const { t } = useTranslation();
   const profile = row.original;
   const router = useRouter();
   const pathname = usePathname();
@@ -75,21 +78,21 @@ function ProfileActions({
     <div className="flex flex-row">
       <button
         className="flex w-full justify-between cursor-pointer"
-        title="Delete"
+        title={t('profile.actionDelete')}
         onClick={onDelete}
       >
         <DeleteIcon className="ml-2 size-4 text-red-500" />
       </button>
       <button
         className="flex w-full justify-between cursor-pointer"
-        title="Edit"
+        title={t('profile.actionEdit')}
         onClick={onEdit}
       >
         <Edit className="ml-2 size-4 text-blue-500" />
       </button>
       <button
         className="flex w-full justify-between cursor-pointer"
-        title="Connect"
+        title={t('profile.actionConnect')}
         onClick={onConnect(profile.name)}
       >
         <Rocket className="ml-2 size-4 text-green-500" />
@@ -99,6 +102,7 @@ function ProfileActions({
 }
 
 export function ProfileTable({ current, onConnect }: ProfileTableProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const qs = useSearchParams();
@@ -181,7 +185,7 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
         multiple: true,
         filters: [
           {
-            name: 'WireGuard Config',
+            name: t('profile.fileFilterName'),
             extensions: ['conf'],
           },
         ],
@@ -202,16 +206,21 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
           const failCount = result.failed.length;
 
           if (successCount > 0 && failCount === 0) {
-            const profileNames =
-              result.success.length <= 3
-                ? `: ${result.success.join(', ')}`
-                : '';
+            const showNames = result.success.length <= 3;
             toast.success(
-              `Successfully imported ${successCount} profile(s)${profileNames}`,
+              showNames
+                ? t('profile.importSuccessNamed', {
+                    count: successCount,
+                    names: result.success.join(', '),
+                  })
+                : t('profile.importSuccess', { count: successCount }),
             );
           } else if (successCount > 0 && failCount > 0) {
             toast.warning(
-              `Imported ${successCount} profile(s), ${failCount} failed`,
+              t('profile.importPartial', {
+                count: successCount,
+                failed: failCount,
+              }),
               {
                 description: result.failed
                   .map((err) => `${err.file_name}: ${err.error}`)
@@ -219,7 +228,7 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
               },
             );
           } else {
-            toast.error('Import failed', {
+            toast.error(t('profile.importFailed'), {
               description: result.failed
                 .map((err) => `${err.file_name}: ${err.error}`)
                 .join('\n'),
@@ -228,16 +237,18 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
         },
         (error) => {
           const normalized = normalizeInvokeError(error);
-          toast.error('Import failed', {
+          toast.error(t('profile.importFailed'), {
             description: normalized.message,
           });
         },
       );
     } catch (error) {
       const normalized = normalizeInvokeError(error);
-      toast.error('Import error', { description: normalized.message });
+      toast.error(t('profile.importError'), {
+        description: normalized.message,
+      });
     }
-  }, [fetchData]);
+  }, [fetchData, t]);
 
   const handleExport = React.useCallback(async () => {
     try {
@@ -258,16 +269,21 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
           const failCount = result.failed.length;
 
           if (successCount > 0 && failCount === 0) {
-            const profileNames =
-              result.success.length <= 3
-                ? `: ${result.success.join(', ')}`
-                : '';
+            const showNames = result.success.length <= 3;
             toast.success(
-              `Successfully exported ${successCount} profile(s)${profileNames}`,
+              showNames
+                ? t('profile.exportSuccessNamed', {
+                    count: successCount,
+                    names: result.success.join(', '),
+                  })
+                : t('profile.exportSuccess', { count: successCount }),
             );
           } else if (successCount > 0 && failCount > 0) {
             toast.warning(
-              `Exported ${successCount} profile(s), ${failCount} failed`,
+              t('profile.exportPartial', {
+                count: successCount,
+                failed: failCount,
+              }),
               {
                 description: result.failed
                   .map((err) => `${err.profile_name}: ${err.error}`)
@@ -275,7 +291,7 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
               },
             );
           } else {
-            toast.error('Export failed', {
+            toast.error(t('profile.exportFailed'), {
               description: result.failed
                 .map((err) => `${err.profile_name}: ${err.error}`)
                 .join('\n'),
@@ -284,16 +300,18 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
         },
         (error) => {
           const normalized = normalizeInvokeError(error);
-          toast.error('Export failed', {
+          toast.error(t('profile.exportFailed'), {
             description: normalized.message,
           });
         },
       );
     } catch (error) {
       const normalized = normalizeInvokeError(error);
-      toast.error('Import error', { description: normalized.message });
+      toast.error(t('profile.exportError'), {
+        description: normalized.message,
+      });
     }
-  }, []);
+  }, [t]);
 
   return (
     <div>
@@ -301,14 +319,14 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
       <div className="relative mr-2 flex justify-end gap-2">
         <button
           onClick={handleExport}
-          title="Export profiles"
+          title={t('profile.actionExport')}
           className="absolute top-14 right-12 z-10 cursor-pointer"
         >
           <Download className="mr-2 size-4" />
         </button>
         <button
           onClick={handleImport}
-          title="Import profiles"
+          title={t('profile.actionImport')}
           className="absolute top-14 right-6 z-10 cursor-pointer"
         >
           <Upload className="mr-2 size-4" />
@@ -322,7 +340,7 @@ export function ProfileTable({ current, onConnect }: ProfileTableProps) {
         />
       </div>
       <Input
-        placeholder="Search"
+        placeholder={t('profile.search')}
         className="mb-2"
         value={filter}
         onChange={onSearchChange}
