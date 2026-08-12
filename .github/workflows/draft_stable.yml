@@ -20,6 +20,11 @@ jobs:
   draft_stable:
     runs-on: ubuntu-24.04
 
+    # Needed by the built-in github.token to create and update releases. The
+    # repository default can be read-only, so declare it explicitly.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v7
       # Extract channel and version from either a tag (0.1.13-stable)
@@ -52,6 +57,15 @@ jobs:
             exit 1
           fi
           echo "Version $VERSION matches tauri.conf.json"
+
+      # Checked before the build, not after: a missing token used to surface
+      # only at the release step, once the full build had already run. Worse,
+      # the "release already exists" probe treats any failure as "not found",
+      # so an auth problem silently steered the run into the create branch.
+      - name: Check gh auth
+        run: gh auth status
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
       # Cache Rust
       - uses: actions/cache@v6
@@ -120,7 +134,7 @@ jobs:
         continue-on-error: true
         run: gh release view $VERSION-$CHANNEL
         env:
-          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
       - name: Create draft release
         if: steps.release-exists.outcome == 'failure' && steps.release-exists.conclusion == 'success'
         run: |
@@ -132,7 +146,7 @@ jobs:
             "${RPM_PATH}#wireguard-gui_amd64.rpm" \
             ./src-tauri/target/release/bundle/appimage/wireguard-gui_${VERSION}_amd64.AppImage#wireguard-gui_amd64.AppImage
         env:
-          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
       # --clobber overwrites assets in place. The previous delete-then-upload
       # pair could never work: assets are stored under the name after '#'
       # (wireguard-gui_amd64.deb), but delete-asset was passed the pre-rename
@@ -147,4 +161,4 @@ jobs:
             "${RPM_PATH}#wireguard-gui_amd64.rpm" \
             ./src-tauri/target/release/bundle/appimage/wireguard-gui_${VERSION}_amd64.AppImage#wireguard-gui_amd64.AppImage
         env:
-          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}

@@ -15,6 +15,11 @@ on:
 
 jobs:
   draft_stable_snap:
+    # Needed by the built-in github.token to attach assets to the release. The
+    # repository default can be read-only, so declare it explicitly.
+    permissions:
+      contents: write
+
     strategy:
       # One architecture failing should not discard the other's artifact.
       fail-fast: false
@@ -52,6 +57,14 @@ jobs:
           fi
           echo "Version $VERSION matches snap/snapcraft.yaml"
 
+      # Snap builds compile everything from source, so check the token up front
+      # rather than discovering it is missing after a very long build.
+      - name: Check gh auth
+        if: github.event_name == 'push'
+        run: gh auth status
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+
       - name: Build snap
         id: build
         uses: snapcore/action-build@v1
@@ -75,7 +88,7 @@ jobs:
         continue-on-error: true
         run: gh release view $VERSION-$CHANNEL
         env:
-          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
       # The deb/AppImage/RPM workflows own release creation. This one only
       # attaches to it: a snap build takes far longer, so by the time it
@@ -88,7 +101,7 @@ jobs:
             $VERSION-$CHANNEL \
             "${{ steps.build.outputs.snap }}#wireguard-gui_${{ matrix.arch }}.snap"
         env:
-          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
       - name: Warn when release is missing
         if: github.event_name == 'push' && steps.release-exists.outcome != 'success'
