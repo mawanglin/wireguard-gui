@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   AlertDialog,
@@ -26,6 +27,7 @@ export function AlertConfirm({
   setOpen,
   onConfirm,
 }: AlertConfirmProps) {
+  const { t } = useTranslation();
   const onCancel = useCallback(() => {
     setOpen?.(false);
   }, [setOpen]);
@@ -37,8 +39,12 @@ export function AlertConfirm({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Continue</AlertDialogAction>
+          <AlertDialogCancel onClick={onCancel}>
+            {t('common.cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            {t('common.continue')}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

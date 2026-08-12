@@ -6,6 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { useTranslation } from 'react-i18next';
 
 import {
   Table,
@@ -25,6 +26,7 @@ export function DataTable<TData, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const { t } = useTranslation();
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
@@ -80,7 +82,7 @@ export function DataTable<TData, TValue>({
                 colSpan={columns.length}
                 className="flex h-10 w-full items-center justify-center p-6 text-center"
               >
-                No results.
+                {t('common.noResults')}
               </TableCell>
             </TableRow>
           )}
