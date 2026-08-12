@@ -2,9 +2,9 @@
 
 import React from 'react';
 import { KeyRound, RotateCcw, Shield, ShieldOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import type { CommandError } from '@/lib/effects';
 import {
   disableProfileEncryption,
   enableProfileEncryption,
@@ -12,6 +12,7 @@ import {
   resetAppData,
   unlockProfiles,
 } from '@/lib/effects';
+import { useErrorMessage } from '@/lib/i18n/error';
 import { AlertConfirm } from '@/components/ui/alert-confirm';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,17 +23,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-
-function mapSecurityError(error: CommandError) {
-  const byCode: Record<string, string> = {
-    encryption_already_enabled: 'Encryption is already enabled.',
-    encryption_not_enabled: 'Encryption is not enabled.',
-    invalid_pin: 'PIN must be exactly 4 digits.',
-    pin_incorrect: 'Incorrect PIN.',
-    profiles_locked: 'Profiles are locked. Unlock first.',
-  };
-  return byCode[error.code || ''] || error.message || 'Unknown error';
-}
 
 function isPinFormatValid(pin: string) {
   return /^\d{4}$/.test(pin);
@@ -49,14 +39,16 @@ export function SecurityControls({
   isUnlocked,
   onStateChanged,
 }: SecurityControlsProps) {
+  const { t } = useTranslation();
+  const errorMessage = useErrorMessage();
   const [enablePin, setEnablePin] = React.useState('');
   const [disablePin, setDisablePin] = React.useState('');
   const [confirmResetOpen, setConfirmResetOpen] = React.useState(false);
 
   const onEnable = React.useCallback(() => {
     if (!isPinFormatValid(enablePin)) {
-      toast.error('Invalid PIN', {
-        description: 'PIN must be exactly 4 digits.',
+      toast.error(t('security.invalidPinTitle'), {
+        description: t('security.invalidPinDescription'),
       });
       return;
     }
@@ -64,20 +56,20 @@ export function SecurityControls({
       enablePin,
       () => {
         setEnablePin('');
-        toast.success('Profile encryption enabled');
+        toast.success(t('security.enableSuccess'));
         onStateChanged();
       },
       (error) =>
-        toast.error('Failed to enable encryption', {
-          description: mapSecurityError(error),
+        toast.error(t('security.enableFailed'), {
+          description: errorMessage(error),
         }),
     );
-  }, [enablePin, onStateChanged]);
+  }, [enablePin, onStateChanged, t, errorMessage]);
 
   const onDisable = React.useCallback(() => {
     if (!isPinFormatValid(disablePin)) {
-      toast.error('Invalid PIN', {
-        description: 'PIN must be exactly 4 digits.',
+      toast.error(t('security.invalidPinTitle'), {
+        description: t('security.invalidPinDescription'),
       });
       return;
     }
@@ -85,26 +77,28 @@ export function SecurityControls({
       disablePin,
       () => {
         setDisablePin('');
-        toast.success('Profile encryption disabled');
+        toast.success(t('security.disableSuccess'));
         onStateChanged();
       },
       (error) =>
-        toast.error('Failed to disable encryption', {
-          description: mapSecurityError(error),
+        toast.error(t('security.disableFailed'), {
+          description: errorMessage(error),
         }),
     );
-  }, [disablePin, onStateChanged]);
+  }, [disablePin, onStateChanged, t, errorMessage]);
 
   const onLockNow = React.useCallback(() => {
     lockProfiles(
       () => {
-        toast.success('Profiles locked');
+        toast.success(t('security.lockSuccess'));
         onStateChanged();
       },
       (error) =>
-        toast.error('Failed to lock', { description: mapSecurityError(error) }),
+        toast.error(t('security.lockFailed'), {
+          description: errorMessage(error),
+        }),
     );
-  }, [onStateChanged]);
+  }, [onStateChanged, t, errorMessage]);
 
   const onConfirmReset = React.useCallback(() => {
     resetAppData(
@@ -112,16 +106,16 @@ export function SecurityControls({
         setConfirmResetOpen(false);
         setEnablePin('');
         setDisablePin('');
-        toast.success('App data reset complete');
+        toast.success(t('app.resetSuccess'));
         onStateChanged();
       },
       (error) => {
-        toast.error('Failed to reset app', {
-          description: mapSecurityError(error),
+        toast.error(t('app.resetFailed'), {
+          description: errorMessage(error),
         });
       },
     );
-  }, [onStateChanged]);
+  }, [onStateChanged, t, errorMessage]);
 
   return (
     <>
@@ -129,13 +123,13 @@ export function SecurityControls({
         isOpen={confirmResetOpen}
         setOpen={setConfirmResetOpen}
         onConfirm={onConfirmReset}
-        title="Reset app data?"
-        description="This will permanently remove all local profiles and security settings. This cannot be undone."
+        title={t('security.resetTitle')}
+        description={t('security.resetDescription')}
       />
       <Dialog>
         <DialogTrigger asChild>
           <Button
-            title="Security settings"
+            title={t('security.openTitle')}
             variant="outline"
             size="icon"
             data-testid="security-open"
@@ -145,7 +139,7 @@ export function SecurityControls({
         </DialogTrigger>
         <DialogContent aria-describedby="security-dialog">
           <DialogHeader>
-            <DialogTitle>Security</DialogTitle>
+            <DialogTitle>{t('security.dialogTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {!encryptionEnabled ? (
@@ -158,14 +152,13 @@ export function SecurityControls({
                 }}
               >
                 <p className="text-sm text-muted-foreground">
-                  Enable at-rest encryption for local WireGuard profiles using a
-                  4-digit PIN.
+                  {t('security.enableHint')}
                 </p>
                 <Input
                   type="password"
                   inputMode="numeric"
                   maxLength={4}
-                  placeholder="4-digit PIN"
+                  placeholder={t('security.pinPlaceholder')}
                   value={enablePin}
                   onChange={(e) =>
                     setEnablePin(e.target.value.replace(/\D/g, ''))
@@ -178,7 +171,7 @@ export function SecurityControls({
                   data-testid="security-enable-submit"
                 >
                   <KeyRound className="size-4" />
-                  Enable encryption
+                  {t('security.enableAction')}
                 </Button>
               </form>
             ) : (
@@ -191,14 +184,13 @@ export function SecurityControls({
                 }}
               >
                 <p className="text-sm text-muted-foreground">
-                  Encryption is active. If you forget the PIN, use full app
-                  reset.
+                  {t('security.activeHint')}
                 </p>
                 <Input
                   type="password"
                   inputMode="numeric"
                   maxLength={4}
-                  placeholder="Current PIN"
+                  placeholder={t('security.currentPinPlaceholder')}
                   value={disablePin}
                   onChange={(e) =>
                     setDisablePin(e.target.value.replace(/\D/g, ''))
@@ -211,7 +203,7 @@ export function SecurityControls({
                   data-testid="security-disable-submit"
                 >
                   <ShieldOff className="size-4" />
-                  Disable encryption
+                  {t('security.disableAction')}
                 </Button>
                 {isUnlocked ? (
                   <Button
@@ -221,7 +213,7 @@ export function SecurityControls({
                     onClick={onLockNow}
                     data-testid="security-lock-now"
                   >
-                    Lock now
+                    {t('security.lockNow')}
                   </Button>
                 ) : null}
               </form>
@@ -235,7 +227,7 @@ export function SecurityControls({
               data-testid="security-reset"
             >
               <RotateCcw className="size-4" />
-              Reset app data
+              {t('security.resetAction')}
             </Button>
           </div>
         </DialogContent>
@@ -250,12 +242,14 @@ export interface UnlockPanelProps {
 }
 
 export function UnlockPanel({ onUnlocked, onReset }: UnlockPanelProps) {
+  const { t } = useTranslation();
+  const errorMessage = useErrorMessage();
   const [pin, setPin] = React.useState('');
 
   const onUnlock = React.useCallback(() => {
     if (!isPinFormatValid(pin)) {
-      toast.error('Invalid PIN', {
-        description: 'PIN must be exactly 4 digits.',
+      toast.error(t('security.invalidPinTitle'), {
+        description: t('security.invalidPinDescription'),
       });
       return;
     }
@@ -263,19 +257,23 @@ export function UnlockPanel({ onUnlocked, onReset }: UnlockPanelProps) {
       pin,
       () => {
         setPin('');
-        toast.success('Profiles unlocked');
+        toast.success(t('security.unlockSuccess'));
         onUnlocked();
       },
       (error) =>
-        toast.error('Unlock failed', { description: mapSecurityError(error) }),
+        toast.error(t('security.unlockFailed'), {
+          description: errorMessage(error),
+        }),
     );
-  }, [pin, onUnlocked]);
+  }, [pin, onUnlocked, t, errorMessage]);
 
   return (
     <div className="rounded-lg border p-6" data-testid="unlock-panel">
-      <h2 className="mb-2 text-lg font-semibold">Profiles are locked</h2>
+      <h2 className="mb-2 text-lg font-semibold">
+        {t('security.lockedTitle')}
+      </h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Enter your 4-digit PIN to unlock encrypted profiles.
+        {t('security.lockedHint')}
       </p>
       <form
         className="flex gap-2"
@@ -288,13 +286,13 @@ export function UnlockPanel({ onUnlocked, onReset }: UnlockPanelProps) {
           type="password"
           inputMode="numeric"
           maxLength={4}
-          placeholder="4-digit PIN"
+          placeholder={t('security.pinPlaceholder')}
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
           data-testid="unlock-pin"
         />
         <Button type="submit" data-testid="unlock-submit">
-          Unlock
+          {t('security.unlockAction')}
         </Button>
       </form>
       <Button
@@ -304,7 +302,7 @@ export function UnlockPanel({ onUnlocked, onReset }: UnlockPanelProps) {
         onClick={onReset}
         data-testid="unlock-reset"
       >
-        Reset app data
+        {t('security.resetAction')}
       </Button>
     </div>
   );
