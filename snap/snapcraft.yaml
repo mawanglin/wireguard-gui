@@ -16,6 +16,7 @@ source-code: https://github.com/0xle0ne/wireguard-gui
 confinement: strict
 platforms:
   amd64:
+  arm64:
 
 apps:
   wireguard-gui:
@@ -54,7 +55,12 @@ parts:
         exit 1
       fi
       NODE_VERSION="v24.14.0"
-      NODE_DIST="node-${NODE_VERSION}-linux-x64"
+      case "$(uname -m)" in
+        x86_64)  NODE_ARCH="x64" ;;
+        aarch64) NODE_ARCH="arm64" ;;
+        *) echo "Unsupported build architecture: $(uname -m)" >&2; exit 1 ;;
+      esac
+      NODE_DIST="node-${NODE_VERSION}-linux-${NODE_ARCH}"
       NODE_ROOT="$CRAFT_PART_BUILD/.node"
       mkdir -p "$NODE_ROOT"
       curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz" -o "$CRAFT_PART_BUILD/node.tar.xz"
@@ -75,7 +81,14 @@ parts:
         echo "No deb artifact found under src-tauri/target/release/bundle/deb" >&2
         exit 1
       fi
-      dpkg-deb -x "$DEB_PATH" "${CRAFT_PART_INSTALL:-$SNAPCRAFT_PART_INSTALL}"
+      INSTALL_DIR="${CRAFT_PART_INSTALL:-$SNAPCRAFT_PART_INSTALL}"
+      dpkg-deb -x "$DEB_PATH" "$INSTALL_DIR"
+      # The webkit2gtk layout below is declared for both architectures because
+      # layout keys cannot be arch-conditional. snapd needs the bind source to
+      # exist inside the snap, so create both; the one for the other
+      # architecture stays empty and binds harmlessly.
+      mkdir -p "$INSTALL_DIR/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"
+      mkdir -p "$INSTALL_DIR/usr/lib/aarch64-linux-gnu/webkit2gtk-4.1"
     build-packages:
       - build-essential
       - curl
@@ -104,8 +117,13 @@ parts:
 
 # Mount webkit2gtk-4.1 (Tauri 2.x / libwebkit2gtk-4.1) and NM paths
 layout:
+  # Declared per-architecture: layout keys are literal paths and cannot use
+  # snapcraft's advanced grammar. Both source directories are created in the
+  # part's override-build so either architecture resolves.
   /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1:
     bind: $SNAP/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1
+  /usr/lib/aarch64-linux-gnu/webkit2gtk-4.1:
+    bind: $SNAP/usr/lib/aarch64-linux-gnu/webkit2gtk-4.1
   /usr/lib/NetworkManager:
     bind: $SNAP/usr/lib/NetworkManager
   /etc/NetworkManager:

@@ -1,0 +1,98 @@
+name: Draft stable Snap
+
+on:
+  push:
+    # Tag form: <version>-<channel>, e.g. 0.1.13-stable
+    tags:
+      - '*-stable'
+  # Snap builds compile the whole app from source and are slow, so they can
+  # also be started by hand without cutting a tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 0.1.13'
+        required: true
+
+jobs:
+  draft_stable_snap:
+    strategy:
+      # One architecture failing should not discard the other's artifact.
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set info
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "CHANNEL=stable" >> $GITHUB_ENV
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "VERSION=${TAG%-*}" >> $GITHUB_ENV
+            echo "CHANNEL=${TAG##*-}" >> $GITHUB_ENV
+          fi
+
+      # snapcraft.yaml carries its own hardcoded version. It drifted to 0.1.9
+      # once while the app was already at 0.1.12, so check it explicitly.
+      - name: Check version matches snapcraft.yaml
+        run: |
+          SNAP_VERSION=$(sed -n "s/^version:[[:space:]]*'\{0,1\}\([^']*\)'\{0,1\}[[:space:]]*$/\1/p" snap/snapcraft.yaml | head -n 1)
+          if [ "$SNAP_VERSION" != "$VERSION" ]; then
+            echo "::error::Version mismatch: ref says '$VERSION', snap/snapcraft.yaml says '$SNAP_VERSION'"
+            exit 1
+          fi
+          echo "Version $VERSION matches snap/snapcraft.yaml"
+
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@v1
+
+      - name: Show built snap
+        run: |
+          ls -lh "${{ steps.build.outputs.snap }}"
+
+      # Keep the artifact even when the release upload below is skipped or the
+      # other architecture fails.
+      - name: Upload snap as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireguard-gui-${{ matrix.arch }}-snap
+          path: ${{ steps.build.outputs.snap }}
+          if-no-files-found: error
+
+      - name: Test if release already exists
+        if: github.event_name == 'push'
+        id: release-exists
+        continue-on-error: true
+        run: gh release view $VERSION-$CHANNEL
+        env:
+          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      # The deb/AppImage/RPM workflows own release creation. This one only
+      # attaches to it: a snap build takes far longer, so by the time it
+      # finishes the release exists. If it somehow does not, the snap is still
+      # available as the workflow artifact uploaded above.
+      - name: Attach snap to draft release
+        if: github.event_name == 'push' && steps.release-exists.outcome == 'success'
+        run: |
+          gh release upload --clobber \
+            $VERSION-$CHANNEL \
+            "${{ steps.build.outputs.snap }}#wireguard-gui_${{ matrix.arch }}.snap"
+        env:
+          GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+
+      - name: Warn when release is missing
+        if: github.event_name == 'push' && steps.release-exists.outcome != 'success'
+        run: |
+          echo "::warning::Release $VERSION-$CHANNEL does not exist yet; \
+          the snap was kept as a workflow artifact instead. Re-run this job \
+          once the deb/AppImage workflow has created the release."

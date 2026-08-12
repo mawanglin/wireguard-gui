@@ -97,6 +97,24 @@ jobs:
       - name: Build application
         run: npm run tauri build
 
+      # RPM file names follow a different convention from deb
+      # (wireguard-gui-0.1.13-1.x86_64.rpm), so resolve the path instead of
+      # spelling it out. Also prints everything that was produced, which makes
+      # a missing bundle obvious in the log.
+      - name: Locate bundles
+        run: |
+          BUNDLE_DIR=./src-tauri/target/release/bundle
+          echo "Produced bundles:"
+          find "$BUNDLE_DIR" -type f \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) \
+            -printf '  %p\n'
+          RPM_PATH=$(find "$BUNDLE_DIR/rpm" -maxdepth 1 -type f -name '*.rpm' | head -n 1)
+          if [ -z "$RPM_PATH" ]; then
+            echo "::error::No RPM found under $BUNDLE_DIR/rpm"
+            exit 1
+          fi
+          echo "RPM_PATH=$RPM_PATH" >> $GITHUB_ENV
+
       - name: Test if release already exists
         id: release-exists
         continue-on-error: true
@@ -111,23 +129,22 @@ jobs:
             -t $VERSION-$CHANNEL \
             -F ./CHANGELOG.md \
             ./src-tauri/target/release/bundle/deb/wireguard-gui_${VERSION}_amd64.deb#wireguard-gui_amd64.deb \
+            "${RPM_PATH}#wireguard-gui_amd64.rpm" \
             ./src-tauri/target/release/bundle/appimage/wireguard-gui_${VERSION}_amd64.AppImage#wireguard-gui_amd64.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
+      # --clobber overwrites assets in place. The previous delete-then-upload
+      # pair could never work: assets are stored under the name after '#'
+      # (wireguard-gui_amd64.deb), but delete-asset was passed the pre-rename
+      # name, so the delete silently no-opped and the upload then failed on a
+      # duplicate asset name.
       - name: Update draft release
         if: steps.release-exists.outcome == 'success' && steps.release-exists.conclusion == 'success'
         run: |
-          gh release delete-asset -y \
+          gh release upload --clobber \
             $VERSION-$CHANNEL \
-            wireguard-gui_${VERSION}_amd64.deb || true
-          gh release delete-asset -y \
-            $VERSION-$CHANNEL \
-            wireguard-gui_${VERSION}_amd64.AppImage|| true
-          gh release upload \
-            $VERSION-$CHANNEL \
-            ./src-tauri/target/release/bundle/deb/wireguard-gui_${VERSION}_amd64.deb#wireguard-gui_amd64.deb
-          gh release upload \
-            $VERSION-$CHANNEL \
+            ./src-tauri/target/release/bundle/deb/wireguard-gui_${VERSION}_amd64.deb#wireguard-gui_amd64.deb \
+            "${RPM_PATH}#wireguard-gui_amd64.rpm" \
             ./src-tauri/target/release/bundle/appimage/wireguard-gui_${VERSION}_amd64.AppImage#wireguard-gui_amd64.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.CI_TOKEN }}
