@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import * as z from 'zod';
 
 import { ProfilePartial } from '@/types/profile';
@@ -19,15 +20,6 @@ import {
 import { Input } from '@/components/ui/input';
 
 import { Textarea } from './ui/textarea';
-
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: 'Name must be at least 2 characters.',
-  }),
-  content: z.string().min(8, {
-    message: 'Content must be at least 8 characters.',
-  }),
-});
 
 const contentPlaceholder = `[Interface]
 Address =
@@ -53,8 +45,18 @@ export default function ProfileForm({
   editId,
   afterSubmit,
 }: ProfileFormProps) {
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // schema 必须随 t 重建：留在模块作用域会把校验消息固化在模块加载时的语言上
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().min(2, { message: t('profile.validationName') }),
+        content: z.string().min(8, { message: t('profile.validationContent') }),
+      }),
+    [t],
+  );
   const defaultValues = useMemo(
     () =>
       data || {
@@ -100,7 +102,7 @@ export default function ProfileForm({
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Name</FormLabel>
+              <FormLabel>{t('profile.fieldName')}</FormLabel>
               <FormControl>
                 <Input
                   placeholder="wgnet0"
@@ -118,7 +120,7 @@ export default function ProfileForm({
           name="content"
           render={({ field }) => (
             <FormItem className="mb-4">
-              <FormLabel>Content</FormLabel>
+              <FormLabel>{t('profile.fieldContent')}</FormLabel>
               <FormControl>
                 <Textarea
                   className="h-[280px] resize-none"
@@ -139,7 +141,7 @@ export default function ProfileForm({
           disabled={isLoading}
           data-testid="profile-save"
         >
-          {isLoading ? 'Loading...' : 'Save'}
+          {isLoading ? t('common.loading') : t('common.save')}
         </Button>
       </form>
     </Form>

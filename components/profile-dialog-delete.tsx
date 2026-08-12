@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 
 import { deleteProfile } from '@/lib/effects';
 
 import { AlertConfirm } from './ui/alert-confirm';
 
 export function ProfileDialogDelete({ onDelete }: { onDelete: () => void }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const qs = useSearchParams();
@@ -34,8 +36,8 @@ export function ProfileDialogDelete({ onDelete }: { onDelete: () => void }) {
       isOpen={isOpen}
       setOpen={setOpen}
       onConfirm={onConfirm}
-      title="Are you absolutely sure?"
-      description="This action cannot be undone. This will permanently delete your profile and remove it's data"
+      title={t('profile.deleteTitle')}
+      description={t('profile.deleteDescription')}
     />
   );
 }

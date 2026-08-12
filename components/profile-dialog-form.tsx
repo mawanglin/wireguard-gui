@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { Profile, ProfilePartial } from '@/types/profile';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ export function ProfileDialogForm({
   afterSubmit,
   onOpenChange,
 }: ProfileDialogFormProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   const hookSetOpen = useCallback(
@@ -64,14 +66,16 @@ export function ProfileDialogForm({
       <button
         onClick={openModal}
         className={cn(className, 'cursor-pointer')}
-        title="New"
+        title={t('profile.actionNew')}
         data-testid="profile-new"
       >
         <Plus className="mr-2 size-4 cursor-pointer" />
       </button>
       <DialogContent aria-describedby="profile-form-dialog">
         <DialogHeader>
-          <DialogTitle>{editId ? 'Edit' : 'Create'} profile</DialogTitle>
+          <DialogTitle>
+            {editId ? t('profile.editTitle') : t('profile.createTitle')}
+          </DialogTitle>
         </DialogHeader>
         <ProfileForm
           data={data}
