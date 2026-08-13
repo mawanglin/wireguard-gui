@@ -62,32 +62,32 @@ jobs:
       # run in parallel with this one. Wait for the asset rather than assuming
       # an ordering.
       #
-      # A draft release carries no real tag association, so looking it up by tag
-      # is unreliable; list releases and match on tag_name instead.
+      # Whatever the lookup actually returns is echoed, so a failure here says
+      # why instead of only saying that it timed out.
       - name: Wait for the deb asset
         run: |
           for attempt in $(seq 1 40); do
-            id=$(gh api "repos/{owner}/{repo}/releases" --paginate \
-              --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] \
-                    | select(.name == \"${{ matrix.deb_asset }}\") | .id")
-            if [ -n "$id" ]; then
-              echo "ASSET_ID=$id" >> $GITHUB_ENV
-              echo "Found ${{ matrix.deb_asset }} (id $id) after $attempt attempt(s)"
+            present=$(gh release view "$TAG" --json assets \
+              --jq '.assets[].name' 2>&1 || true)
+
+            if printf '%s\n' "$present" | grep -qx "${{ matrix.deb_asset }}"; then
+              echo "Found ${{ matrix.deb_asset }} after $attempt attempt(s)"
               exit 0
             fi
-            echo "Attempt $attempt: ${{ matrix.deb_asset }} not attached yet"
+
+            echo "Attempt $attempt: ${{ matrix.deb_asset }} not attached yet."
+            echo "  lookup returned:"
+            printf '%s\n' "$present" | sed 's/^/    /'
             sleep 30
           done
           echo "::error::${{ matrix.deb_asset }} never appeared on release $TAG"
           exit 1
 
-      # Downloaded through the asset API because gh release download resolves
-      # by tag, which does not work for a draft.
       - name: Download the deb
         run: |
-          gh api -H "Accept: application/octet-stream" \
-            "repos/{owner}/{repo}/releases/assets/$ASSET_ID" \
-            > flatpak/wireguard-gui.deb
+          gh release download "$TAG" \
+            -p "${{ matrix.deb_asset }}" -D flatpak --clobber
+          mv "flatpak/${{ matrix.deb_asset }}" flatpak/wireguard-gui.deb
           ls -lh flatpak/wireguard-gui.deb
           file flatpak/wireguard-gui.deb
 
@@ -127,7 +127,7 @@ jobs:
           path: wireguard-gui_${{ matrix.arch }}.flatpak
           if-no-files-found: error
 
-      - name: Attach flatpak to draft release
+      - name: Attach flatpak to release
         if: github.event_name == 'push'
         run: |
           gh release upload --clobber \

@@ -135,10 +135,15 @@ jobs:
         run: gh release view $VERSION-$CHANNEL
         env:
           GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
-      - name: Create draft release
+      # Published immediately rather than as a draft. A draft is invisible to
+      # everyone but collaborators, and coordinating a separate job to publish
+      # it meant polling the releases API across workflows, which repeatedly
+      # failed to see the draft at all. The tradeoff is that the release is
+      # briefly incomplete while the other architectures finish.
+      - name: Create release
         if: steps.release-exists.outcome == 'failure' && steps.release-exists.conclusion == 'success'
         run: |
-          gh release create -d \
+          gh release create \
             $VERSION-$CHANNEL \
             -t $VERSION-$CHANNEL \
             -F ./CHANGELOG.md \
@@ -152,7 +157,7 @@ jobs:
       # (wireguard-gui_amd64.deb), but delete-asset was passed the pre-rename
       # name, so the delete silently no-opped and the upload then failed on a
       # duplicate asset name.
-      - name: Update draft release
+      - name: Update release
         if: steps.release-exists.outcome == 'success' && steps.release-exists.conclusion == 'success'
         run: |
           gh release upload --clobber \
@@ -160,5 +165,14 @@ jobs:
             ./src-tauri/target/release/bundle/deb/wireguard-gui_${VERSION}_amd64.deb#wireguard-gui_amd64.deb \
             "${RPM_PATH}#wireguard-gui_amd64.rpm" \
             ./src-tauri/target/release/bundle/appimage/wireguard-gui_${VERSION}_amd64.AppImage#wireguard-gui_amd64.AppImage
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+      # Idempotent, and it also rescues a release left over as a draft by an
+      # earlier revision of these workflows.
+      - name: Ensure the release is published
+        run: |
+          gh release edit $VERSION-$CHANNEL --draft=false --latest
+          gh release view $VERSION-$CHANNEL --json isDraft,url \
+            --jq '"isDraft=\(.isDraft) \(.url)"'
         env:
           GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}

@@ -94,7 +94,7 @@ jobs:
       # attaches to it: a snap build takes far longer, so by the time it
       # finishes the release exists. If it somehow does not, the snap is still
       # available as the workflow artifact uploaded above.
-      - name: Attach snap to draft release
+      - name: Attach snap to release
         if: github.event_name == 'push' && steps.release-exists.outcome == 'success'
         run: |
           gh release upload --clobber \
