@@ -13,24 +13,29 @@ jobs:
 
     runs-on: ubuntu-24.04
 
+    env:
+      GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+      # Lets gh resolve {owner}/{repo} without a checkout.
+      GH_REPO: ${{ github.repository }}
+
     steps:
       - name: Set info
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          echo "VERSION=${TAG%-*}" >> $GITHUB_ENV
-          echo "CHANNEL=${TAG##*-}" >> $GITHUB_ENV
+          echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Check gh auth
         run: gh auth status
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
-      # The build workflows create the release as a draft, which nobody but a
-      # collaborator can see. This job flips it to published once the proven
-      # formats are all attached.
+      # A draft release carries no real tag association, so looking it up by tag
+      # is unreliable. Listing releases and matching on tag_name works for both
+      # drafts and published releases.
       #
-      # Flatpak is deliberately not in the required list: it is experimental and
-      # a failure there must not hold back the formats that do work.
+      # The build workflows create the release as a draft, which nobody but a
+      # collaborator can see. This waits for the proven formats and then makes
+      # it visible.
+      #
+      # Flatpak is deliberately not required: it is experimental, and a failure
+      # there must not hold back the formats that do work.
       - name: Wait for the required assets
         run: |
           REQUIRED="
@@ -44,9 +49,9 @@ jobs:
           wireguard-gui_arm64.snap
           "
 
-          for attempt in $(seq 1 90); do
-            present=$(gh release view "$VERSION-$CHANNEL" --json assets \
-              -q '.assets[].name' 2>/dev/null || true)
+          for attempt in $(seq 1 60); do
+            present=$(gh api "repos/{owner}/{repo}/releases" --paginate \
+              --jq ".[] | select(.tag_name == \"$TAG\") | .assets[].name")
 
             missing=""
             for asset in $REQUIRED; do
@@ -64,25 +69,28 @@ jobs:
 
           echo "::error::Timed out waiting for:$missing"
           exit 1
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
       - name: Publish the release
         run: |
-          gh release edit "$VERSION-$CHANNEL" --draft=false --latest
-          echo "Published $VERSION-$CHANNEL"
-          gh release view "$VERSION-$CHANNEL" --json assets -q '.assets[].name' \
+          id=$(gh api "repos/{owner}/{repo}/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .id")
+          if [ -z "$id" ]; then
+            echo "::error::No release found for tag $TAG"
+            exit 1
+          fi
+          gh api -X PATCH "repos/{owner}/{repo}/releases/$id" \
+            -F draft=false -f make_latest=true > /dev/null
+          echo "Published $TAG:"
+          gh api "repos/{owner}/{repo}/releases/$id" --jq '.assets[].name' \
             | sed 's/^/  /'
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
-      # Flatpak may still be building, or may have failed. Either way the
-      # release is already out; say so rather than failing the job.
+      # Flatpak may still be building, or may have failed. The release is out
+      # either way, so report rather than fail.
       - name: Report optional assets
         if: always()
         run: |
-          present=$(gh release view "$VERSION-$CHANNEL" --json assets \
-            -q '.assets[].name' 2>/dev/null || true)
+          present=$(gh api "repos/{owner}/{repo}/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .assets[].name" || true)
           for asset in wireguard-gui_x86_64.flatpak wireguard-gui_aarch64.flatpak; do
             if printf '%s\n' "$present" | grep -qx "$asset"; then
               echo "optional asset present: $asset"
@@ -90,5 +98,3 @@ jobs:
               echo "::warning::optional asset absent: $asset (flatpak is experimental)"
             fi
           done
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}

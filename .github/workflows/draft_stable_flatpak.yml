@@ -31,24 +31,23 @@ jobs:
 
     runs-on: ${{ matrix.runner }}
 
+    env:
+      GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+      GH_REPO: ${{ github.repository }}
+
     steps:
       - uses: actions/checkout@v7
 
       - name: Set info
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-            echo "CHANNEL=stable" >> $GITHUB_ENV
+            echo "TAG=${{ github.event.inputs.version }}-stable" >> $GITHUB_ENV
           else
-            TAG="${GITHUB_REF#refs/tags/}"
-            echo "VERSION=${TAG%-*}" >> $GITHUB_ENV
-            echo "CHANNEL=${TAG##*-}" >> $GITHUB_ENV
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           fi
 
       - name: Check gh auth
         run: gh auth status
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
       - name: Install flatpak tooling
         run: |
@@ -62,31 +61,35 @@ jobs:
       # The deb comes from the Draft stable / Draft stable ARM workflows, which
       # run in parallel with this one. Wait for the asset rather than assuming
       # an ordering.
+      #
+      # A draft release carries no real tag association, so looking it up by tag
+      # is unreliable; list releases and match on tag_name instead.
       - name: Wait for the deb asset
         run: |
-          for attempt in $(seq 1 60); do
-            if gh release view "$VERSION-$CHANNEL" --json assets \
-                 -q '.assets[].name' 2>/dev/null \
-                 | grep -qx "${{ matrix.deb_asset }}"; then
-              echo "Found ${{ matrix.deb_asset }} after $attempt attempt(s)"
+          for attempt in $(seq 1 40); do
+            id=$(gh api "repos/{owner}/{repo}/releases" --paginate \
+              --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] \
+                    | select(.name == \"${{ matrix.deb_asset }}\") | .id")
+            if [ -n "$id" ]; then
+              echo "ASSET_ID=$id" >> $GITHUB_ENV
+              echo "Found ${{ matrix.deb_asset }} (id $id) after $attempt attempt(s)"
               exit 0
             fi
-            echo "Attempt $attempt: ${{ matrix.deb_asset }} not published yet"
+            echo "Attempt $attempt: ${{ matrix.deb_asset }} not attached yet"
             sleep 30
           done
-          echo "::error::${{ matrix.deb_asset }} never appeared on release $VERSION-$CHANNEL"
+          echo "::error::${{ matrix.deb_asset }} never appeared on release $TAG"
           exit 1
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
 
+      # Downloaded through the asset API because gh release download resolves
+      # by tag, which does not work for a draft.
       - name: Download the deb
         run: |
-          gh release download "$VERSION-$CHANNEL" \
-            -p "${{ matrix.deb_asset }}" -D flatpak --clobber
-          mv "flatpak/${{ matrix.deb_asset }}" flatpak/wireguard-gui.deb
+          gh api -H "Accept: application/octet-stream" \
+            "repos/{owner}/{repo}/releases/assets/$ASSET_ID" \
+            > flatpak/wireguard-gui.deb
           ls -lh flatpak/wireguard-gui.deb
-        env:
-          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+          file flatpak/wireguard-gui.deb
 
       - name: Build flatpak
         run: |
@@ -128,7 +131,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           gh release upload --clobber \
-            "$VERSION-$CHANNEL" \
+            "$TAG" \
             "wireguard-gui_${{ matrix.arch }}.flatpak"
         env:
           GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
