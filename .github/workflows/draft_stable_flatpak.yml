@@ -24,10 +24,10 @@ jobs:
         include:
           - runner: ubuntu-24.04
             arch: x86_64
-            deb_asset: wireguard-gui_amd64.deb
+            deb_arch: amd64
           - runner: ubuntu-24.04-arm
             arch: aarch64
-            deb_asset: wireguard-gui_arm64.deb
+            deb_arch: arm64
 
     runs-on: ${{ matrix.runner }}
 
@@ -38,13 +38,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The asset name is the file name tauri produced, which carries the
+      # version. The '#name' suffix used when uploading sets the asset *label*,
+      # not its name, so matching on the unversioned form finds nothing.
       - name: Set info
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            echo "TAG=${{ github.event.inputs.version }}-stable" >> $GITHUB_ENV
+            VERSION="${{ github.event.inputs.version }}"
+            echo "TAG=$VERSION-stable" >> $GITHUB_ENV
           else
-            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG%-*}"
+            echo "TAG=$TAG" >> $GITHUB_ENV
           fi
+          echo "DEB_ASSET=wireguard-gui_${VERSION}_${{ matrix.deb_arch }}.deb" \
+            >> $GITHUB_ENV
 
       - name: Check gh auth
         run: gh auth status
@@ -70,24 +78,24 @@ jobs:
             present=$(gh release view "$TAG" --json assets \
               --jq '.assets[].name' 2>&1 || true)
 
-            if printf '%s\n' "$present" | grep -qx "${{ matrix.deb_asset }}"; then
-              echo "Found ${{ matrix.deb_asset }} after $attempt attempt(s)"
+            if printf '%s\n' "$present" | grep -qx "$DEB_ASSET"; then
+              echo "Found $DEB_ASSET after $attempt attempt(s)"
               exit 0
             fi
 
-            echo "Attempt $attempt: ${{ matrix.deb_asset }} not attached yet."
+            echo "Attempt $attempt: $DEB_ASSET not attached yet."
             echo "  lookup returned:"
             printf '%s\n' "$present" | sed 's/^/    /'
             sleep 30
           done
-          echo "::error::${{ matrix.deb_asset }} never appeared on release $TAG"
+          echo "::error::$DEB_ASSET never appeared on release $TAG"
           exit 1
 
       - name: Download the deb
         run: |
           gh release download "$TAG" \
-            -p "${{ matrix.deb_asset }}" -D flatpak --clobber
-          mv "flatpak/${{ matrix.deb_asset }}" flatpak/wireguard-gui.deb
+            -p "$DEB_ASSET" -D flatpak --clobber
+          mv "flatpak/$DEB_ASSET" flatpak/wireguard-gui.deb
           ls -lh flatpak/wireguard-gui.deb
           file flatpak/wireguard-gui.deb
 
