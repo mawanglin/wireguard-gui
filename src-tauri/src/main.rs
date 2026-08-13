@@ -364,6 +364,53 @@ fn is_snap_mode() -> bool {
   std::env::var_os("IS_SNAP").is_some()
 }
 
+/// True when running inside a Flatpak sandbox.
+///
+/// `/.flatpak-info` is written by flatpak into every sandbox. It is preferred
+/// over `FLATPAK_ID` because it survives the app re-executing itself.
+fn is_flatpak_mode() -> bool {
+  static IS_FLATPAK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+  *IS_FLATPAK.get_or_init(|| std::path::Path::new("/.flatpak-info").exists())
+}
+
+/// Build a command that runs on the host regardless of sandboxing.
+///
+/// The Flatpak sandbox contains no `nmcli`, `ip`, `wg-quick` or `pkexec`, so
+/// inside it every external command is forwarded to the host through
+/// `flatpak-spawn`. That requires `--talk-name=org.freedesktop.Flatpak` in the
+/// manifest. Outside Flatpak this is a plain command.
+fn host_command(program: &str) -> Command {
+  if is_flatpak_mode() {
+    let mut cmd = Command::new("flatpak-spawn");
+    cmd.arg("--host");
+    cmd.arg(program);
+    cmd
+  } else {
+    Command::new(program)
+  }
+}
+
+fn host_command_with_env(
+  program: &str,
+  envs: &HashMap<String, &str>,
+) -> Command {
+  if is_flatpak_mode() {
+    let mut cmd = Command::new("flatpak-spawn");
+    cmd.arg("--host");
+    // flatpak-spawn does not forward the caller's environment, so anything the
+    // host command needs has to be passed explicitly.
+    for (key, value) in envs {
+      cmd.arg(format!("--env={key}={value}"));
+    }
+    cmd.arg(program);
+    cmd
+  } else {
+    let mut cmd = Command::new(program);
+    cmd.envs(envs);
+    cmd
+  }
+}
+
 fn is_valid_profile_name(name: &str) -> bool {
   !name.is_empty()
     && name.len() <= 15
@@ -373,26 +420,18 @@ fn is_valid_profile_name(name: &str) -> bool {
 }
 
 async fn is_nmcli_available() -> bool {
-  match timeout(
-    Duration::from_secs(2),
-    Command::new("nmcli").args(["--version"]).output(),
-  )
-  .await
-  {
+  let mut cmd = host_command("nmcli");
+  cmd.args(["--version"]);
+  match timeout(Duration::from_secs(2), cmd.output()).await {
     Ok(Ok(output)) => output.status.success(),
     _ => false,
   }
 }
 
 async fn get_active_nm_profile(current_hint: Option<&str>, conf_dir: &str) -> Option<String> {
-  let output = match timeout(
-    Duration::from_secs(3),
-    Command::new("nmcli")
-      .args(["-t", "-f", "NAME,TYPE", "connection", "show", "--active"])
-      .output(),
-  )
-  .await
-  {
+  let mut cmd = host_command("nmcli");
+  cmd.args(["-t", "-f", "NAME,TYPE", "connection", "show", "--active"]);
+  let output = match timeout(Duration::from_secs(3), cmd.output()).await {
     Ok(Ok(out)) => out,
     Ok(Err(_)) => return None,
     Err(_) => return None,
@@ -548,16 +587,19 @@ async fn sync_connection_state(
 }
 
 async fn get_con_st(current: &str) -> ConnSt {
-  let output = Command::new("ip")
-    .args(["-br", "link", "show", "dev", current])
-    .output()
-    .await
-    .expect("ip command failed");
-  // check status code
-  if output.status.success() {
-    return ConnSt::Connected;
+  let mut cmd = host_command("ip");
+  cmd.args(["-br", "link", "show", "dev", current]);
+  // This runs on a poll timer. A missing iproute2, or a flatpak-spawn that
+  // cannot reach the host, used to panic the whole app here; report the
+  // interface as down instead.
+  match cmd.output().await {
+    Ok(output) if output.status.success() => ConnSt::Connected,
+    Ok(_) => ConnSt::Disconnected,
+    Err(error) => {
+      println!("[wg-gui] get_con_st: failed to run ip: {error}");
+      ConnSt::Disconnected
+    }
   }
-  ConnSt::Disconnected
 }
 
 async fn init_app_st() -> AppSt {
@@ -591,18 +633,18 @@ async fn exec_wg_action(app_state: &AppSt, profile: &str, action: &str) -> Resul
   if is_snap {
     envs.insert("IS_SNAP".to_owned(), "true");
     println!("[wg-gui] exec_wg: running in snap environment for profile {}", profile);
+  } else if is_flatpak_mode() {
+    // The script itself needs no flatpak branch: it is executed on the host,
+    // where nmcli, wg-quick and pkexec all behave normally.
+    println!("[wg-gui] exec_wg: running in flatpak environment for profile {}", profile);
   } else {
     println!("[wg-gui] exec_wg: running in native environment for profile {}", profile);
   }
 
   println!("[wg-gui] exec_wg: executing wg.sh for profile {} with action {}", profile, action);
-  let res = timeout(
-    Duration::from_secs(20),
-    Command::new("bash")
-      .args([format!("{conf_dir}/wg.sh")])
-      .envs(envs)
-      .output(),
-  )
+  let mut cmd = host_command_with_env("bash", &envs);
+  cmd.args([format!("{conf_dir}/wg.sh")]);
+  let res = timeout(Duration::from_secs(20), cmd.output())
   .await
   .map_err(|_| AppError::coded("timeout", "wg operation timed out"))?
   .map_err(|e| AppError::coded("script_exec_failed", format!("Failed to execute wg.sh: {}", e)))?;

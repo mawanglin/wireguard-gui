@@ -1,0 +1,134 @@
+name: Draft stable Flatpak
+
+on:
+  push:
+    # Tag form: <version>-<channel>, e.g. 0.1.13-stable
+    tags:
+      - '*-stable'
+  # The deb is downloaded rather than rebuilt, so this can be re-run on its own
+  # while iterating on the manifest without paying for a full release build.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to package, e.g. 0.1.13'
+        required: true
+
+jobs:
+  draft_stable_flatpak:
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            deb_asset: wireguard-gui_amd64.deb
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            deb_asset: wireguard-gui_arm64.deb
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set info
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "CHANNEL=stable" >> $GITHUB_ENV
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "VERSION=${TAG%-*}" >> $GITHUB_ENV
+            echo "CHANNEL=${TAG##*-}" >> $GITHUB_ENV
+          fi
+
+      - name: Check gh auth
+        run: gh auth status
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+
+      - name: Install flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive flathub \
+            org.gnome.Platform//46 org.gnome.Sdk//46
+
+      # The deb comes from the Draft stable / Draft stable ARM workflows, which
+      # run in parallel with this one. Wait for the asset rather than assuming
+      # an ordering.
+      - name: Wait for the deb asset
+        run: |
+          for attempt in $(seq 1 60); do
+            if gh release view "$VERSION-$CHANNEL" --json assets \
+                 -q '.assets[].name' 2>/dev/null \
+                 | grep -qx "${{ matrix.deb_asset }}"; then
+              echo "Found ${{ matrix.deb_asset }} after $attempt attempt(s)"
+              exit 0
+            fi
+            echo "Attempt $attempt: ${{ matrix.deb_asset }} not published yet"
+            sleep 30
+          done
+          echo "::error::${{ matrix.deb_asset }} never appeared on release $VERSION-$CHANNEL"
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+
+      - name: Download the deb
+        run: |
+          gh release download "$VERSION-$CHANNEL" \
+            -p "${{ matrix.deb_asset }}" -D flatpak --clobber
+          mv "flatpak/${{ matrix.deb_asset }}" flatpak/wireguard-gui.deb
+          ls -lh flatpak/wireguard-gui.deb
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}
+
+      - name: Build flatpak
+        run: |
+          flatpak-builder --force-clean --repo=repo \
+            build-dir flatpak/com.wireguard-gui.io.yml
+
+      # The GNOME runtime does not carry every library the deb links against.
+      # Rather than guessing the list, report it: anything printed here as "not
+      # found" has to become an extra module in the manifest.
+      - name: Report unresolved shared libraries
+        if: always()
+        run: |
+          echo "=== ldd /app/bin/wireguard-gui inside the build sandbox ==="
+          flatpak-builder --run build-dir flatpak/com.wireguard-gui.io.yml \
+            ldd /app/bin/wireguard-gui > ldd.txt 2>&1 || true
+          cat ldd.txt
+          echo
+          if grep -q 'not found' ldd.txt; then
+            echo "::warning::Unresolved libraries — add these to the manifest:"
+            grep 'not found' ldd.txt
+          else
+            echo "All shared libraries resolved."
+          fi
+
+      - name: Bundle flatpak
+        run: |
+          flatpak build-bundle repo \
+            "wireguard-gui_${{ matrix.arch }}.flatpak" com.wireguard-gui.io
+          ls -lh "wireguard-gui_${{ matrix.arch }}.flatpak"
+
+      - name: Upload flatpak as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireguard-gui-${{ matrix.arch }}-flatpak
+          path: wireguard-gui_${{ matrix.arch }}.flatpak
+          if-no-files-found: error
+
+      - name: Attach flatpak to draft release
+        if: github.event_name == 'push'
+        run: |
+          gh release upload --clobber \
+            "$VERSION-$CHANNEL" \
+            "wireguard-gui_${{ matrix.arch }}.flatpak"
+        env:
+          GH_TOKEN: ${{ secrets.CI_TOKEN || github.token }}

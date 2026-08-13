@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.wireguard-gui.io</id>
+
+  <name>WireGuard GUI</name>
+  <summary>WireGuard client GUI</summary>
+  <summary xml:lang="zh-CN">WireGuard 客户端图形界面</summary>
+  <summary xml:lang="zh-TW">WireGuard 用戶端圖形介面</summary>
+  <summary xml:lang="ja">WireGuard クライアントの GUI</summary>
+  <summary xml:lang="ru">Графический клиент WireGuard</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+
+  <description>
+    <p>
+      A desktop client for managing WireGuard profiles on Linux. Import, edit
+      and delete profiles, connect and disconnect, and optionally encrypt
+      stored profiles at rest behind a 4-digit PIN.
+    </p>
+    <p xml:lang="zh-CN">
+      用于管理 Linux 上 WireGuard 配置的桌面客户端。支持导入、编辑与删除配置，
+      连接和断开，并可选择用 4 位 PIN 码对本地配置进行静态加密。
+    </p>
+    <p>
+      Connections are handled through NetworkManager when it is available, and
+      fall back to wg-quick otherwise.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">com.wireguard-gui.io.desktop</launchable>
+
+  <url type="homepage">https://github.com/mawanglin/wireguard-gui</url>
+  <url type="bugtracker">https://github.com/mawanglin/wireguard-gui/issues</url>
+
+  <developer id="io.wireguard-gui">
+    <name>WireGuard GUI Contributors</name>
+  </developer>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.13" date="2026-08-12">
+      <description>
+        <p>Adds multi-language support and localized desktop metadata.</p>
+      </description>
+    </release>
+  </releases>
+</component>

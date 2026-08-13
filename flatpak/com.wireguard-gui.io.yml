@@ -1,0 +1,76 @@
+# Flatpak manifest for self-hosted / direct distribution.
+#
+# This build is deliberately NOT Flathub-ready: it grants
+# --talk-name=org.freedesktop.Flatpak so the app can reach the host's nmcli,
+# wg-quick and pkexec through flatpak-spawn. Flathub treats that as a sandbox
+# escape. Going to Flathub would mean bundling NetworkManager's client and
+# talking to NM over D-Bus instead.
+#
+# The app binary is taken from the .deb produced by `tauri build` rather than
+# compiled here: flatpak-builder runs without network access, and the Rust and
+# npm builds both need it.
+
+app-id: com.wireguard-gui.io
+runtime: org.gnome.Platform
+# Kept in sync with the version installed in .github/workflows/draft_stable_flatpak.yml
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: wireguard-gui
+
+finish-args:
+  # Public IP lookup and the tunnel itself
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+
+  # Required by flatpak-spawn --host. This is the permission that makes the
+  # host's nmcli / wg-quick / pkexec reachable.
+  - --talk-name=org.freedesktop.Flatpak
+
+  # Profiles live in the real ~/.config/wireguard-gui so a Flatpak install and
+  # a deb/AppImage install see the same profiles. The app derives this path
+  # from $HOME directly rather than XDG_CONFIG_HOME.
+  - --filesystem=xdg-config/wireguard-gui:create
+
+  # Tray icon (ayatana appindicator publishes a StatusNotifierItem)
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.StatusNotifierItem-*
+
+modules:
+  - name: wireguard-gui
+    buildsystem: simple
+    build-commands:
+      - ar x wireguard-gui.deb
+      - mkdir -p pkg
+      - tar -xf data.tar.* -C pkg
+
+      - install -Dm755 pkg/usr/bin/wireguard-gui /app/bin/wireguard-gui
+
+      # Flatpak requires the desktop file, icons and metainfo to be named after
+      # the app id. The desktop file ships localized Name/GenericName/Comment
+      # entries from src-tauri/templates/main.desktop, which are preserved; only
+      # the Icon key is repointed at the renamed icon.
+      - |
+        set -eu
+        desktop=pkg/usr/share/applications/wireguard-gui.desktop
+        sed -i 's/^Icon=.*/Icon=com.wireguard-gui.io/' "$desktop"
+        install -Dm644 "$desktop" /app/share/applications/com.wireguard-gui.io.desktop
+      - |
+        set -eu
+        for icon in pkg/usr/share/icons/hicolor/*/apps/wireguard-gui.png; do
+          [ -e "$icon" ] || continue
+          size=$(basename "$(dirname "$(dirname "$icon")")")
+          install -Dm644 "$icon" \
+            "/app/share/icons/hicolor/$size/apps/com.wireguard-gui.io.png"
+        done
+      - install -Dm644 com.wireguard-gui.io.metainfo.xml
+        /app/share/metainfo/com.wireguard-gui.io.metainfo.xml
+
+    sources:
+      # Placed next to the manifest by the CI workflow before building.
+      - type: file
+        path: wireguard-gui.deb
+      - type: file
+        path: com.wireguard-gui.io.metainfo.xml
